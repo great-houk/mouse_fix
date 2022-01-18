@@ -109,16 +109,15 @@ unsafe fn switch_screens() {
     });
     let new_x;
     let new_y;
-    if mouse_pos.x > MONITOR_0.width {
-        let x_perc =
-            (mouse_pos.x as f32 - MONITOR_0.width as f32 - 1.) / (MONITOR_1.width as f32 - 2.);
+    if mouse_pos.x >= MONITOR_0.width {
+        let x_perc = (mouse_pos.x as f32 - MONITOR_0.width as f32) / (MONITOR_1.width as f32 - 1.);
         let y_perc = mouse_pos.y as f32 / (MONITOR_1.height as f32 - 1.);
         new_x = (x_perc * (MONITOR_0.width as f32 - 0.5)) as i32;
         new_y = (y_perc * (MONITOR_0.height as f32 - 0.5)) as i32;
     } else {
         let x_perc = mouse_pos.x as f32 / (MONITOR_0.width as f32 - 1.);
         let y_perc = mouse_pos.y as f32 / (MONITOR_0.height as f32 - 1.);
-        new_x = (x_perc * (MONITOR_1.width as f32 - 1.5)) as i32 + MONITOR_0.width + 1;
+        new_x = (x_perc * (MONITOR_1.width as f32 - 0.5)) as i32 + MONITOR_0.width;
         new_y = (y_perc * (MONITOR_1.height as f32 - 0.5)) as i32;
     }
     println!("{new_x}, {new_y}");
@@ -132,14 +131,14 @@ unsafe fn switch_screens() {
 unsafe fn set_clips(point: POINT) {
     let mut rect = mem::zeroed();
     GetClipCursor(&mut rect);
-    if point.x > MONITOR_0.width {
+    if point.x >= MONITOR_0.width {
         if rect.left != MONITOR_0.width + 1
             || rect.top != 0
             || rect.right != MONITOR_0.width + MONITOR_1.width
             || rect.bottom != MONITOR_0.height + MONITOR_1.height
         {
             ClipCursor(&RECT {
-                left: MONITOR_0.width + 1,
+                left: MONITOR_0.width,
                 top: 0,
                 right: MONITOR_0.width + MONITOR_1.width,
                 bottom: MONITOR_0.height + MONITOR_1.height,
