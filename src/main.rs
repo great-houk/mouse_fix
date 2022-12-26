@@ -12,16 +12,17 @@ use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::UI::WindowsAndMessaging::{
     CallNextHookEx, ClipCursor, CreateWindowExW, DefWindowProcW, DestroyWindow, DispatchMessageW,
     GetClipCursor, GetCursorPos, GetMessageW, PostMessageW, PostQuitMessage, RegisterClassW,
-    SetCursorPos, SetWindowsHookExW, TranslateMessage, CW_USEDEFAULT, HMENU, KBDLLHOOKSTRUCT,
-    WH_KEYBOARD_LL, WH_MOUSE_LL, WM_APP, WM_CLOSE, WM_DESTROY, WM_KEYUP, WM_LBUTTONDOWN,
-    WM_MOUSEMOVE, WM_NULL, WNDCLASSW, WS_OVERLAPPEDWINDOW,
+    SetCursorPos, SetWindowsHookExW, /* ShowWindow, */ TranslateMessage, CW_USEDEFAULT, HMENU,
+    KBDLLHOOKSTRUCT, /* SW_SHOW, */ WH_KEYBOARD_LL, WH_MOUSE_LL, WM_APP, WM_CLOSE, WM_DESTROY,
+    WM_KEYUP, WM_LBUTTONDOWN, WM_MOUSEMOVE, WM_NULL, WNDCLASSW, WS_OVERLAPPEDWINDOW,
 };
 use windows::Win32::UI::{
-    Input::KeyboardAndMouse::VK_F13,
+    Input::KeyboardAndMouse::{VK_F13, VK_PAUSE},
     Shell::{Shell_NotifyIconW, NIF_MESSAGE, NIF_TIP, NIM_ADD, NIM_DELETE, NOTIFYICONDATAW},
 };
 const TRAY_ICON_MESSAGE: u32 = WM_APP + 1;
-const KEY: u16 = VK_F13;
+const KEY_1: u32 = VK_F13 as u32;
+const KEY_2: u32 = VK_PAUSE as u32;
 
 struct Monitor {
     width: i32,
@@ -68,8 +69,8 @@ unsafe extern "system" fn window_process(
 }
 
 unsafe fn create_hidden_window() -> HWND {
-    let name = "thing";
-    let title = "window";
+    let name = "Mouse Fix Window";
+    let title = "Mouse Fix";
     let hinstance = GetModuleHandleW(PWSTR(ptr::null_mut()));
 
     // Create "class" for window, using WNDCLASSW struct (different from Window our struct)
@@ -101,12 +102,7 @@ unsafe fn create_hidden_window() -> HWND {
 unsafe fn switch_screens() {
     let mut mouse_pos = mem::zeroed();
     GetCursorPos(&mut mouse_pos);
-    ClipCursor(&RECT {
-        left: -1000,
-        top: -1000,
-        right: MONITOR_0.width + MONITOR_1.width + 1000,
-        bottom: MONITOR_0.height + MONITOR_1.height + 1000,
-    });
+    ClipCursor(ptr::null());
     let new_x;
     let new_y;
     if mouse_pos.x >= MONITOR_0.width {
@@ -120,11 +116,19 @@ unsafe fn switch_screens() {
         new_x = (x_perc * (MONITOR_1.width as f32 - 0.5)) as i32 + MONITOR_0.width;
         new_y = (y_perc * (MONITOR_1.height as f32 - 0.5)) as i32;
     }
-    println!("{new_x}, {new_y}");
+    // println!("{:?}", SetCursorPos(new_x, new_y));
+    // println!("{:?}", SetCursorPos(new_x, new_y));
+    // GetCursorPos(&mut mouse_pos);
+    // println!(
+    //     "Same: {}, Actual: {},{}, Should: {new_x},{new_y}",
+    //     new_x == mouse_pos.x && new_y == mouse_pos.y,
+    //     mouse_pos.x,
+    //     mouse_pos.y
+    // );
+    // println!("{new_x}, {new_y}");
     SetCursorPos(new_x, new_y);
     SetCursorPos(new_x, new_y);
-    GetCursorPos(&mut mouse_pos);
-    println!("{mouse_pos:?}");
+    // println!("{mouse_pos:?}");
     set_clips(POINT { x: new_x, y: new_y });
 }
 
@@ -164,7 +168,10 @@ unsafe extern "system" fn keyboard_callback(ncode: i32, wparam: WPARAM, lparam: 
         GetCursorPos(&mut point);
         set_clips(point);
         let keyboard_struct = *mem::transmute::<_, &KBDLLHOOKSTRUCT>(lparam);
-        if wparam.0 == WM_KEYUP as usize && keyboard_struct.vkCode == KEY as u32 {
+        if wparam.0 == WM_KEYUP as usize && keyboard_struct.vkCode == KEY_1 {
+            switch_screens();
+        }
+        if wparam.0 == WM_KEYUP as usize && keyboard_struct.vkCode == KEY_2 {
             switch_screens();
         }
     }
@@ -223,8 +230,6 @@ fn main() {
             }
         }
 
-        // ShowWindow(hwnd, SW_SHOW);
-
         let mut msg = mem::zeroed();
         loop {
             let b = GetMessageW(&mut msg, hwnd, 0, 0);
@@ -249,7 +254,7 @@ fn main() {
 
         if !Shell_NotifyIconW(NIM_DELETE, &data).as_bool() {
             let error = GetLastError();
-            println!("{error}, 0x{error:x}");
+            println!("0x{error:X}, 0x{error:X}");
             println!("Failed");
         }
 
