@@ -1,10 +1,10 @@
 // Disable while debugging
-#![windows_subsystem = "windows"]
-use std::ffi::OsStr;
-use std::iter::once;
-use std::mem;
-use std::os::windows::prelude::OsStrExt;
-use std::ptr;
+// #![windows_subsystem = "windows"]
+use std::{ffi::OsStr, sync::Mutex, thread::JoinHandle};
+use std::{iter::once, sync::mpsc::Sender};
+use std::{mem, sync::mpsc::Receiver};
+use std::{os::windows::prelude::OsStrExt, sync::mpsc::channel};
+use std::{ptr, time::Duration};
 use windows::Win32::Foundation::{
     GetLastError, SetLastError, BOOL, HWND, LPARAM, LRESULT, POINT, PWSTR, RECT, WPARAM,
 };
@@ -23,6 +23,8 @@ use windows::Win32::UI::{
 const TRAY_ICON_MESSAGE: u32 = WM_APP + 1;
 const KEY_1: u32 = VK_F13 as u32;
 const KEY_2: u32 = VK_PAUSE as u32;
+
+static WAIT_SENDER: Mutex<Option<Sender<(i32, i32)>>> = Mutex::new(None);
 
 struct Monitor {
     width: i32,
@@ -116,20 +118,20 @@ unsafe fn switch_screens() {
         new_x = (x_perc * (MONITOR_1.width as f32 - 0.5)) as i32 + MONITOR_0.width;
         new_y = (y_perc * (MONITOR_1.height as f32 - 0.5)) as i32;
     }
-    // println!("{:?}", SetCursorPos(new_x, new_y));
-    // println!("{:?}", SetCursorPos(new_x, new_y));
-    // GetCursorPos(&mut mouse_pos);
-    // println!(
-    //     "Same: {}, Actual: {},{}, Should: {new_x},{new_y}",
-    //     new_x == mouse_pos.x && new_y == mouse_pos.y,
-    //     mouse_pos.x,
-    //     mouse_pos.y
-    // );
-    // println!("{new_x}, {new_y}");
-    SetCursorPos(new_x, new_y);
-    SetCursorPos(new_x, new_y);
-    // println!("{mouse_pos:?}");
-    set_clips(POINT { x: new_x, y: new_y });
+    if let Some(sender) = &*WAIT_SENDER.lock().unwrap() {
+        sender.send((new_x, new_y)).unwrap();
+    }
+}
+
+fn wait_move(recv: Receiver<(i32, i32)>) {
+    unsafe {
+        while let Ok((x, y)) = recv.recv() {
+            // Necessary delay for some reason, don't remove
+            std::thread::sleep(Duration::from_millis(10));
+            SetCursorPos(x, y);
+            set_clips(POINT { x, y });
+        }
+    }
 }
 
 unsafe fn set_clips(point: POINT) {
@@ -197,6 +199,10 @@ fn set_sized_str(val: &str, arr: &mut [u16]) {
 }
 
 fn main() {
+    let (send, recv) = channel();
+    *WAIT_SENDER.lock().unwrap() = Some(send);
+    let _ = std::thread::spawn(move || wait_move(recv));
+
     unsafe {
         let hwnd = create_hidden_window();
 
